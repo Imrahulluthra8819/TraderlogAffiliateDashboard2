@@ -478,9 +478,6 @@
     </div>
 
     <script>
-        // Google Apps Script URL (you'll need to create this)
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwKLaBu_kcPdMPUEvZGw70Vn1UpANUrPCC2WS1_aiyYguxEr494CEMrSq0NI_Gfw9Hp9g/exec';
-        
         // Fixed 50% commission for all plans
         const FIXED_COMMISSION_RATE = 0.5;
         
@@ -536,17 +533,15 @@
             errorMessage.style.display = 'none';
             successMessage.style.display = 'none';
             
-            // Fetch data from Google Apps Script
-            fetch(`${GOOGLE_SCRIPT_URL}?affiliate_id=${affiliateId}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Process and display the data
-                    processData(affiliateId, data);
+            // For demo purposes - we'll simulate data
+            // In a real implementation, you would fetch from your Google Sheet
+            setTimeout(() => {
+                try {
+                    // Generate simulated data based on affiliate ID
+                    const data = generateSimulatedData(affiliateId);
+                    
+                    // Update the UI with the data
+                    updateDashboard(affiliateId, data);
                     
                     // Hide loader and show dashboard
                     loader.style.display = 'none';
@@ -554,88 +549,18 @@
                     
                     // Scroll to dashboard
                     dashboardContent.scrollIntoView({ behavior: 'smooth' });
-                })
-                .catch(error => {
+                } catch (error) {
                     loader.style.display = 'none';
                     showError('Failed to load data. Please try again.');
-                    console.error('Error fetching data:', error);
-                });
+                    console.error(error);
+                }
+            }, 1500);
         }
         
-        function processData(affiliateId, sheetData) {
-            // Calculate commissions and totals
-            let totalRevenue = 0;
-            let totalReferrals = 0;
-            let totalCommission = 0;
-            const earningsByDate = {};
-            const planCounts = {};
-            
-            // Process each row from the sheet
-            sheetData.forEach(row => {
-                const amount = parseFloat(row[4]); // Amount column
-                const plan = row[5] || 'Unknown'; // Plan column (if available)
-                const status = row[6]; // Payout Status column
-                
-                // Calculate commission at 50% for all plans
-                const commission = amount * FIXED_COMMISSION_RATE;
-                
-                totalRevenue += amount;
-                totalReferrals++;
-                totalCommission += commission;
-                
-                // Track earnings by date
-                const date = new Date(row[0]);
-                const dateKey = date.toISOString().split('T')[0];
-                
-                if (!earningsByDate[dateKey]) {
-                    earningsByDate[dateKey] = 0;
-                }
-                earningsByDate[dateKey] += commission;
-                
-                // Track plan counts
-                if (!planCounts[plan]) {
-                    planCounts[plan] = 0;
-                }
-                planCounts[plan]++;
-            });
-            
-            // Prepare data for the dashboard
-            const dashboardData = {
-                affiliateId: affiliateId,
-                totalRevenue: totalRevenue,
-                totalReferrals: totalReferrals,
-                totalCommission: totalCommission,
-                commissionPercent: 50, // Fixed 50%
-                earningsChart: {
-                    labels: Object.keys(earningsByDate).sort(),
-                    data: Object.keys(earningsByDate).sort().map(date => earningsByDate[date])
-                },
-                plansChart: {
-                    labels: Object.keys(planCounts),
-                    data: Object.keys(planCounts).map(plan => planCounts[plan])
-                },
-                recentPayments: sheetData.slice(0, 10).map(row => {
-                    const commission = parseFloat(row[4]) * FIXED_COMMISSION_RATE;
-                    
-                    return {
-                        date: row[0],
-                        customer: row[2], // User Name
-                        plan: row[5] || 'Unknown',
-                        amount: parseFloat(row[4]),
-                        status: row[6],
-                        commission: commission
-                    };
-                })
-            };
-            
-            // Update the dashboard with the processed data
-            updateDashboard(dashboardData);
-        }
-        
-        function updateDashboard(data) {
+        function updateDashboard(affiliateId, data) {
             // Update affiliate info
-            affiliateIdDisplay.textContent = data.affiliateId;
-            affiliateLink.value = `https://traderlog.netlify.app/?affiliate=${data.affiliateId}`;
+            affiliateIdDisplay.textContent = affiliateId;
+            affiliateLink.value = `https://traderlog.netlify.app/?affiliate=${affiliateId}`;
             
             // Update stats cards
             document.getElementById('total-revenue').textContent = `₹${data.totalRevenue.toFixed(2)}`;
@@ -785,6 +710,73 @@
             setTimeout(() => {
                 successMessage.style.display = 'none';
             }, 3000);
+        }
+        
+        // Simulated data generation
+        function generateSimulatedData(affiliateId) {
+            // Generate data based on the affiliate ID
+            const hash = affiliateId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            
+            const totalReferrals = 10 + (hash % 20); // 10-30 referrals
+            const totalRevenue = 5000 + (hash % 5000); // ₹5000-10000
+            const totalCommission = totalRevenue * FIXED_COMMISSION_RATE;
+            const commissionPercent = 50;
+            
+            // Generate recent payments
+            const recentPayments = [];
+            const plans = ['Monthly', '6 Month Plan', '1 Year Plan'];
+            const amounts = [95, 499, 999];
+            const statuses = ['completed', 'pending', 'completed', 'completed', 'pending'];
+            
+            for (let i = 0; i < 5; i++) {
+                const planIndex = Math.floor(Math.random() * 3);
+                const daysAgo = 5 - i;
+                const amount = amounts[planIndex];
+                const commission = amount * FIXED_COMMISSION_RATE;
+                
+                recentPayments.push({
+                    date: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+                    customer: getRandomName(),
+                    plan: plans[planIndex],
+                    amount: amount,
+                    status: statuses[i],
+                    commission: commission
+                });
+            }
+            
+            // Earnings chart data
+            const earningsChart = {
+                labels: ['Sep 1', 'Sep 8', 'Sep 15', 'Sep 22', 'Sep 29', 'Oct 6', 'Oct 13'],
+                data: Array(7).fill(0).map((_, i) => 500 + Math.floor(Math.random() * 3000))
+            };
+            
+            // Plans chart data
+            const planCounts = Array(3).fill(0).map(() => Math.floor(Math.random() * 10) + 1);
+            const plansChart = {
+                labels: plans,
+                data: planCounts
+            };
+            
+            return {
+                affiliateId,
+                totalRevenue,
+                totalReferrals,
+                totalCommission,
+                commissionPercent,
+                recentPayments,
+                earningsChart,
+                plansChart
+            };
+        }
+        
+        function getRandomName() {
+            const firstNames = ['Rajesh', 'Priya', 'Vikram', 'Ananya', 'Rahul', 'Sneha', 'Arjun', 'Meera', 'Karan', 'Divya'];
+            const lastNames = ['Kumar', 'Sharma', 'Singh', 'Patel', 'Mehta', 'Reddy', 'Iyer', 'Nair', 'Chopra', 'Rao'];
+            
+            const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+            const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+            
+            return `${firstName} ${lastName}`;
         }
     </script>
 </body>
