@@ -139,6 +139,7 @@
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s;
+            min-width: 100px;
         }
         
         .copy-btn:hover {
@@ -310,6 +311,7 @@
             cursor: pointer;
             transition: all 0.3s;
             font-weight: 600;
+            min-width: 150px;
         }
         
         .input-group button:hover {
@@ -336,32 +338,6 @@
             color: var(--danger);
             margin-top: 10px;
             display: none;
-            background: rgba(239, 68, 68, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            text-align: left;
-            max-width: 600px;
-            margin: 20px auto;
-        }
-        
-        .error-title {
-            font-weight: bold;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .error-details {
-            font-size: 0.9rem;
-            margin-top: 10px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 6px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            max-height: 200px;
-            overflow: auto;
         }
         
         .success-message {
@@ -387,30 +363,6 @@
             opacity: 1;
         }
         
-        .debug-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border-radius: 16px;
-            padding: 20px;
-            margin-top: 20px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-        }
-        
-        .debug-panel h3 {
-            color: var(--accent);
-            margin-bottom: 10px;
-        }
-        
-        .debug-info {
-            font-family: monospace;
-            white-space: pre-wrap;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 15px;
-            border-radius: 8px;
-            max-height: 200px;
-            overflow: auto;
-            font-size: 0.9rem;
-        }
-        
         @media (max-width: 768px) {
             .charts-container {
                 grid-template-columns: 1fr;
@@ -422,6 +374,16 @@
             
             .input-group {
                 flex-direction: column;
+            }
+            
+            .input-group button {
+                width: 100%;
+                padding: 15px;
+                min-width: unset;
+            }
+            
+            .copy-btn {
+                min-width: unset;
             }
         }
     </style>
@@ -449,16 +411,8 @@
                 <button id="load-dashboard-btn">Load Dashboard</button>
             </div>
             <div class="loader" id="loader"></div>
+            <div class="error-message" id="error-message"></div>
             <div class="success-message" id="success-message"></div>
-            
-            <div class="error-message" id="error-message" style="display: none;">
-                <div class="error-title">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span>Failed to load data</span>
-                </div>
-                <div id="error-text">Please try again</div>
-                <div class="error-details" id="error-details"></div>
-            </div>
         </div>
         
         <!-- Dashboard Content (hidden by default) -->
@@ -479,7 +433,7 @@
                 <div class="stat-card">
                     <div class="stat-value" id="total-revenue">₹0.00</div>
                     <div class="stat-label">Total Revenue</div>
-                    <div class="commission-tooltip">Revenue from all referrals</div>
+                    <div class="commission-tooltip">Revenue from captured referrals</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="total-referrals">0</div>
@@ -489,12 +443,12 @@
                 <div class="stat-card">
                     <div class="stat-value" id="total-commission">₹0.00</div>
                     <div class="stat-label">Total Commission</div>
-                    <div class="commission-tooltip">Your total earnings (50% of revenue)</div>
+                    <div class="commission-tooltip">Your earnings (50% of captured revenue)</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="commission-percent">50%</div>
                     <div class="stat-label">Commission Rate</div>
-                    <div class="commission-tooltip">Fixed 50% commission on all sales</div>
+                    <div class="commission-tooltip">Fixed 50% on captured payments</div>
                 </div>
             </div>
             
@@ -528,23 +482,15 @@
                 </table>
             </div>
             
-            <div class="debug-panel">
-                <h3>Data Connection Status</h3>
-                <div class="debug-info" id="debug-info">
-                    No data loaded yet. Enter your affiliate ID and click "Load Dashboard".
-                </div>
-            </div>
-            
             <footer>
                 <p>© 2023 TraderLog. All rights reserved.</p>
-                <p>Next payout date: <span id="payout-date">25 October 2023</span></p>
             </footer>
         </div>
     </div>
 
     <script>
         // Google Apps Script URL (replace with your actual URL)
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySoy9CwOPzceKR4SyxVxcvrd8ZFjmoHX3iJ_3IRad0ab9YhlKx3OWK8G839lTT1ZsYgw/exec';
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
         
         // Fixed 50% commission for all plans
         const FIXED_COMMISSION_RATE = 0.5;
@@ -557,10 +503,7 @@
         const affiliateLink = document.getElementById('affiliate-link');
         const loader = document.getElementById('loader');
         const errorMessage = document.getElementById('error-message');
-        const errorText = document.getElementById('error-text');
-        const errorDetails = document.getElementById('error-details');
         const successMessage = document.getElementById('success-message');
-        const debugInfo = document.getElementById('debug-info');
         
         // Charts
         let earningsChart = null;
@@ -604,9 +547,6 @@
             errorMessage.style.display = 'none';
             successMessage.style.display = 'none';
             
-            // Update debug info
-            debugInfo.textContent = `Fetching data for affiliate ID: ${affiliateId}...`;
-            
             // Fetch data from Google Apps Script
             fetch(`${GOOGLE_SCRIPT_URL}?affiliate_id=${affiliateId}`)
                 .then(response => {
@@ -616,10 +556,6 @@
                     return response.json();
                 })
                 .then(data => {
-                    // Debug information
-                    debugInfo.textContent = `Data received: ${data.data.length} records found\n\n` + 
-                        `Response Preview:\n${JSON.stringify(data.data.slice(0, 2), null, 2)}`;
-                    
                     // Process and display the data
                     processData(affiliateId, data);
                     
@@ -632,20 +568,13 @@
                 })
                 .catch(error => {
                     loader.style.display = 'none';
-                    
-                    // Detailed error message
-                    const errorMsg = `Failed to load data: ${error.message}`;
-                    const debugMsg = `Error Details:\n${error.stack || error.message}\n\n` +
-                        `Please check:\n1. Google Script URL is correct\n2. Script is deployed\n` +
-                        `3. Sheet has "Affiliate ID" column\n4. Affiliate ID exists in sheet`;
-                    
-                    showError(errorMsg, debugMsg);
+                    showError('Failed to load data. Please try again.');
                     console.error('Error fetching data:', error);
                 });
         }
         
         function processData(affiliateId, sheetData) {
-            // Calculate commissions and totals
+            // Calculate commissions and totals (ONLY FOR CAPTURED STATUS)
             let totalRevenue = 0;
             let totalReferrals = 0;
             let totalCommission = 0;
@@ -667,6 +596,7 @@
                 const amountStr = row[AMOUNT_COL].toString().replace(/[^\d.]/g, '');
                 const amount = parseFloat(amountStr) || 0;
                 const status = row[STATUS_COL];
+                const isCaptured = status.toLowerCase().includes('captured');
                 
                 // Skip invalid or zero amounts
                 if (amount <= 0 || isNaN(amount)) return;
@@ -674,27 +604,30 @@
                 // Derive plan from amount
                 const plan = getPlanFromAmount(amount);
                 
-                // Calculate commission at 50% for all plans
-                const commission = amount * FIXED_COMMISSION_RATE;
+                // Calculate commission - ONLY for captured status
+                const commission = isCaptured ? amount * FIXED_COMMISSION_RATE : 0;
                 
-                totalRevenue += amount;
-                totalReferrals++;
-                totalCommission += commission;
-                
-                // Track earnings by date
-                const dateObj = new Date(date);
-                const dateKey = dateObj.toISOString().split('T')[0];
-                
-                if (!earningsByDate[dateKey]) {
-                    earningsByDate[dateKey] = 0;
+                // Add to totals ONLY if captured
+                if (isCaptured) {
+                    totalRevenue += amount;
+                    totalReferrals++;
+                    totalCommission += commission;
+                    
+                    // Track earnings by date
+                    const dateObj = new Date(date);
+                    const dateKey = dateObj.toISOString().split('T')[0];
+                    
+                    if (!earningsByDate[dateKey]) {
+                        earningsByDate[dateKey] = 0;
+                    }
+                    earningsByDate[dateKey] += commission;
+                    
+                    // Track plan counts
+                    if (!planCounts[plan]) {
+                        planCounts[plan] = 0;
+                    }
+                    planCounts[plan]++;
                 }
-                earningsByDate[dateKey] += commission;
-                
-                // Track plan counts
-                if (!planCounts[plan]) {
-                    planCounts[plan] = 0;
-                }
-                planCounts[plan]++;
             });
             
             // Prepare data for the dashboard
@@ -715,7 +648,9 @@
                 recentPayments: sheetData.data.slice(0, 10).map(row => {
                     const amountStr = row[AMOUNT_COL].toString().replace(/[^\d.]/g, '');
                     const amount = parseFloat(amountStr) || 0;
-                    const commission = amount * FIXED_COMMISSION_RATE;
+                    const status = row[STATUS_COL];
+                    const isCaptured = status.toLowerCase().includes('captured');
+                    const commission = isCaptured ? amount * FIXED_COMMISSION_RATE : 0;
                     const plan = getPlanFromAmount(amount);
                     
                     return {
@@ -723,7 +658,7 @@
                         customer: row[USER_NAME_COL],
                         plan: plan,
                         amount: amount,
-                        status: row[STATUS_COL],
+                        status: status,
                         commission: commission
                     };
                 })
@@ -752,13 +687,6 @@
             document.getElementById('total-commission').textContent = `₹${data.totalCommission.toFixed(2)}`;
             document.getElementById('commission-percent').textContent = `${data.commissionPercent}%`;
             
-            // Update next payout date
-            const payoutDate = new Date();
-            payoutDate.setDate(payoutDate.getDate() + 10);
-            document.getElementById('payout-date').textContent = payoutDate.toLocaleDateString('en-GB', {
-                day: 'numeric', month: 'long', year: 'numeric'
-            });
-            
             // Update payments table
             const tableBody = document.getElementById('payments-body');
             tableBody.innerHTML = '';
@@ -773,7 +701,7 @@
                 
                 // Determine status class
                 let statusClass = 'status-pending';
-                if (payment.status.toLowerCase().includes('completed')) {
+                if (payment.status.toLowerCase().includes('captured')) {
                     statusClass = 'status-completed';
                 } else if (payment.status.toLowerCase().includes('failed')) {
                     statusClass = 'status-failed';
@@ -882,9 +810,8 @@
             });
         }
         
-        function showError(message, details = '') {
-            errorText.textContent = message;
-            errorDetails.textContent = details;
+        function showError(message) {
+            errorMessage.textContent = message;
             errorMessage.style.display = 'block';
         }
         
@@ -899,4 +826,3 @@
     </script>
 </body>
 </html>
-
