@@ -336,6 +336,32 @@
             color: var(--danger);
             margin-top: 10px;
             display: none;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: left;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+        
+        .error-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .error-details {
+            font-size: 0.9rem;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow: auto;
         }
         
         .success-message {
@@ -359,6 +385,30 @@
         
         .stat-card:hover .commission-tooltip {
             opacity: 1;
+        }
+        
+        .debug-panel {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        
+        .debug-panel h3 {
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+        
+        .debug-info {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow: auto;
+            font-size: 0.9rem;
         }
         
         @media (max-width: 768px) {
@@ -399,8 +449,16 @@
                 <button id="load-dashboard-btn">Load Dashboard</button>
             </div>
             <div class="loader" id="loader"></div>
-            <div class="error-message" id="error-message"></div>
             <div class="success-message" id="success-message"></div>
+            
+            <div class="error-message" id="error-message" style="display: none;">
+                <div class="error-title">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Failed to load data</span>
+                </div>
+                <div id="error-text">Please try again</div>
+                <div class="error-details" id="error-details"></div>
+            </div>
         </div>
         
         <!-- Dashboard Content (hidden by default) -->
@@ -470,6 +528,13 @@
                 </table>
             </div>
             
+            <div class="debug-panel">
+                <h3>Data Connection Status</h3>
+                <div class="debug-info" id="debug-info">
+                    No data loaded yet. Enter your affiliate ID and click "Load Dashboard".
+                </div>
+            </div>
+            
             <footer>
                 <p>© 2023 TraderLog. All rights reserved.</p>
                 <p>Next payout date: <span id="payout-date">25 October 2023</span></p>
@@ -492,7 +557,10 @@
         const affiliateLink = document.getElementById('affiliate-link');
         const loader = document.getElementById('loader');
         const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        const errorDetails = document.getElementById('error-details');
         const successMessage = document.getElementById('success-message');
+        const debugInfo = document.getElementById('debug-info');
         
         // Charts
         let earningsChart = null;
@@ -536,15 +604,22 @@
             errorMessage.style.display = 'none';
             successMessage.style.display = 'none';
             
+            // Update debug info
+            debugInfo.textContent = `Fetching data for affiliate ID: ${affiliateId}...`;
+            
             // Fetch data from Google Apps Script
             fetch(`${GOOGLE_SCRIPT_URL}?affiliate_id=${affiliateId}`)
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error('Network response was not ok');
+                        throw new Error(`Server returned ${response.status} ${response.statusText}`);
                     }
                     return response.json();
                 })
                 .then(data => {
+                    // Debug information
+                    debugInfo.textContent = `Data received: ${data.data.length} records found\n\n` + 
+                        `Response Preview:\n${JSON.stringify(data.data.slice(0, 2), null, 2)}`;
+                    
                     // Process and display the data
                     processData(affiliateId, data);
                     
@@ -557,7 +632,14 @@
                 })
                 .catch(error => {
                     loader.style.display = 'none';
-                    showError('Failed to load data. Please try again.');
+                    
+                    // Detailed error message
+                    const errorMsg = `Failed to load data: ${error.message}`;
+                    const debugMsg = `Error Details:\n${error.stack || error.message}\n\n` +
+                        `Please check:\n1. Google Script URL is correct\n2. Script is deployed\n` +
+                        `3. Sheet has "Affiliate ID" column\n4. Affiliate ID exists in sheet`;
+                    
+                    showError(errorMsg, debugMsg);
                     console.error('Error fetching data:', error);
                 });
         }
@@ -570,14 +652,24 @@
             const earningsByDate = {};
             const planCounts = {};
             
+            // Column indices based on your sheet headers
+            const DATE_COL = 0;
+            const USER_NAME_COL = 2;
+            const AMOUNT_COL = 4;
+            const STATUS_COL = 5;
+            const AFFILIATE_COL = 6;
+            
             // Process each row from the sheet
-            // Columns: Date, User email, User Name, User Mobile, Amount (₹), Payout Status, Affiliate ID
-            sheetData.forEach(row => {
+            sheetData.data.forEach(row => {
                 // Extract values based on column order
-                const date = row[0];
-                const userName = row[2]; // User Name is at index 2
-                const amount = parseFloat(row[4]); // Amount (₹) is at index 4
-                const status = row[5]; // Payout Status is at index 5
+                const date = row[DATE_COL];
+                const userName = row[USER_NAME_COL];
+                const amountStr = row[AMOUNT_COL].toString().replace(/[^\d.]/g, '');
+                const amount = parseFloat(amountStr) || 0;
+                const status = row[STATUS_COL];
+                
+                // Skip invalid or zero amounts
+                if (amount <= 0 || isNaN(amount)) return;
                 
                 // Derive plan from amount
                 const plan = getPlanFromAmount(amount);
@@ -620,17 +712,18 @@
                     labels: Object.keys(planCounts),
                     data: Object.keys(planCounts).map(plan => planCounts[plan])
                 },
-                recentPayments: sheetData.slice(0, 10).map(row => {
-                    const amount = parseFloat(row[4]);
+                recentPayments: sheetData.data.slice(0, 10).map(row => {
+                    const amountStr = row[AMOUNT_COL].toString().replace(/[^\d.]/g, '');
+                    const amount = parseFloat(amountStr) || 0;
                     const commission = amount * FIXED_COMMISSION_RATE;
                     const plan = getPlanFromAmount(amount);
                     
                     return {
-                        date: row[0],
-                        customer: row[2], // User Name
+                        date: row[DATE_COL],
+                        customer: row[USER_NAME_COL],
                         plan: plan,
                         amount: amount,
-                        status: row[5], // Payout Status
+                        status: row[STATUS_COL],
                         commission: commission
                     };
                 })
@@ -789,8 +882,9 @@
             });
         }
         
-        function showError(message) {
-            errorMessage.textContent = message;
+        function showError(message, details = '') {
+            errorText.textContent = message;
+            errorDetails.textContent = details;
             errorMessage.style.display = 'block';
         }
         
@@ -805,4 +899,3 @@
     </script>
 </body>
 </html>
-
